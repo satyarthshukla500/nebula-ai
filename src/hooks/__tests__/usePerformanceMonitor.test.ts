@@ -4,16 +4,22 @@
  * Unit tests for the performance monitoring hook to ensure proper
  * FPS tracking, frame time calculation, and automatic degradation.
  * 
- * **Validates: Requirements 5.6, 5.7, 13.2, 13.3, 13.4, 13.6**
+ * @jest-environment jsdom
  */
 
 import { renderHook, act } from '@testing-library/react'
 import { usePerformanceMonitor } from '../usePerformanceMonitor'
 
+// Provide cancelAnimationFrame/requestAnimationFrame for jsdom at module scope
+// so they're available even during React cleanup after afterEach runs.
+;(global as any).requestAnimationFrame = (cb: FrameRequestCallback): number =>
+  setTimeout(cb, 16) as unknown as number
+;(global as any).cancelAnimationFrame = (id: number): void => clearTimeout(id)
+
 describe('usePerformanceMonitor', () => {
   beforeEach(() => {
     jest.useFakeTimers()
-    // Mock requestAnimationFrame
+    // Override with jest mocks for assertion purposes
     let frameId = 0
     global.requestAnimationFrame = jest.fn((callback) => {
       frameId++
@@ -25,8 +31,13 @@ describe('usePerformanceMonitor', () => {
 
   afterEach(() => {
     jest.clearAllTimers()
-    jest.useRealTimers()
     jest.clearAllMocks()
+    jest.useRealTimers()
+    // Restore working implementations after useRealTimers so React cleanup
+    // can call cancelAnimationFrame without throwing
+    ;(global as any).requestAnimationFrame = (cb: FrameRequestCallback): number =>
+      setTimeout(cb, 16) as unknown as number
+    ;(global as any).cancelAnimationFrame = (id: number): void => clearTimeout(id)
   })
 
   describe('Initialization', () => {

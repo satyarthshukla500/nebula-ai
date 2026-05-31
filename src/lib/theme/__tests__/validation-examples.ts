@@ -264,3 +264,21 @@ export function exampleSafeThemeApplication(
   
   return fallbackTheme
 }
+
+// ============================================================================
+// Jest requires at least one test — these examples are utility functions,
+// not test cases. This placeholder satisfies the requirement.
+// ============================================================================
+
+describe('validation-examples (utility module)', () => {
+  it('exports all example functions', () => {
+    expect(typeof exampleValidateBeforeSave).toBe('function')
+    expect(typeof exampleValidateColorInput).toBe('function')
+    expect(typeof exampleValidateRealtimeUpdate).toBe('function')
+    expect(typeof exampleValidateImportedThemes).toBe('function')
+    expect(typeof exampleValidateThemeName).toBe('function')
+    expect(typeof exampleValidateEffectValue).toBe('function')
+    expect(typeof exampleValidateWithDetailedFeedback).toBe('function')
+    expect(typeof exampleSafeThemeApplication).toBe('function')
+  })
+})

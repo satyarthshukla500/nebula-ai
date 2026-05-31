@@ -98,6 +98,7 @@ CREATE TABLE crisis_events (
     'guardian_disabled',
     'check_in_completed',
     'check_in_missed',
+    'check_in_snoozed',
     'escalation_stage_1',
     'escalation_stage_2',
     'escalation_stage_3',

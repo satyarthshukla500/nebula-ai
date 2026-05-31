@@ -1,117 +1,130 @@
 /**
  * SMS Notification Provider
- * 
- * Placeholder for SMS notification delivery.
- * To be implemented with Twilio, AWS SNS, or similar service.
+ *
+ * Sends SMS messages via Twilio.
+ * Falls back gracefully when credentials are not configured.
+ *
+ * Required environment variables:
+ *   TWILIO_ACCOUNT_SID  — Twilio Account SID
+ *   TWILIO_AUTH_TOKEN   — Twilio Auth Token
+ *   TWILIO_FROM_NUMBER  — Twilio phone number in E.164 format (e.g. +15551234567)
  */
 
+import twilio from 'twilio';
 import {
   NotificationProvider,
   NotificationRequest,
   NotificationResult,
 } from '../types';
+import { getSmsTemplate } from '../templates/smsTemplates';
 
 /**
- * SMS Provider - Placeholder for SMS delivery
- * 
- * TODO: Integrate with SMS service (Twilio, AWS SNS, etc.)
- * 
- * Configuration needed:
- * - SMS service credentials
- * - From phone number
- * - Message templates
- * - Rate limiting
- * - Cost tracking
+ * SMSProvider — Twilio-backed SMS delivery
  */
 export class SMSProvider implements NotificationProvider {
   readonly name = 'SMSProvider';
 
+  private client: ReturnType<typeof twilio> | null = null;
+
+  private get accountSid(): string {
+    return process.env.TWILIO_ACCOUNT_SID ?? '';
+  }
+
+  private get authToken(): string {
+    return process.env.TWILIO_AUTH_TOKEN ?? '';
+  }
+
+  private get fromNumber(): string {
+    return process.env.TWILIO_FROM_NUMBER ?? '';
+  }
+
   /**
-   * Send notification via SMS
-   * Currently throws "Not Implemented" error
+   * Returns true only when all required Twilio credentials are set.
    */
-  async send(request: NotificationRequest): Promise<NotificationResult> {
-    const timestamp = new Date().toISOString();
-
-    // Log attempt (for debugging)
-    console.warn('⚠️  SMSProvider called but not implemented', {
-      timestamp,
-      userId: request.payload.userId,
-      type: request.payload.type,
-      recipientType: request.recipient.type,
-    });
-
-    // Throw clear error
-    throw new Error(
-      'SMSProvider is not implemented. Please configure an SMS service (Twilio, AWS SNS, etc.) to enable SMS notifications.'
+  isAvailable(): boolean {
+    return !!(
+      process.env.TWILIO_ACCOUNT_SID &&
+      process.env.TWILIO_AUTH_TOKEN &&
+      process.env.TWILIO_FROM_NUMBER
     );
   }
 
   /**
-   * Check if SMS provider is configured
-   * Currently always returns false
+   * Lazily initialise the Twilio client so it is only created when needed.
    */
-  isAvailable(): boolean {
-    // TODO: Check for SMS service configuration
-    // Example: return !!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN;
-    return false;
+  private getClient(): ReturnType<typeof twilio> {
+    if (!this.client) {
+      this.client = twilio(this.accountSid, this.authToken);
+    }
+    return this.client;
+  }
+
+  /**
+   * Send a notification SMS via Twilio.
+   */
+  async send(request: NotificationRequest): Promise<NotificationResult> {
+    const timestamp = new Date().toISOString();
+    const phone = request.recipient.phone;
+
+    if (!phone) {
+      return {
+        success: false,
+        provider: this.name,
+        timestamp,
+        error: 'No phone number provided for SMS delivery',
+      };
+    }
+
+    if (!this.isAvailable()) {
+      return {
+        success: false,
+        provider: this.name,
+        timestamp,
+        error:
+          'SMSProvider not configured: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER are required',
+      };
+    }
+
+    const body = getSmsTemplate(request.payload.type, {
+      message: request.payload.message ?? '',
+      recipientName: request.recipient.name,
+      userId: request.payload.userId,
+      metadata: request.payload.metadata,
+    });
+
+    try {
+      const message = await this.getClient().messages.create({
+        body,
+        from: this.fromNumber,
+        to: phone,
+      });
+
+      const maskedPhone = maskPhone(phone);
+      console.log('📱 [SMSProvider] SMS sent via Twilio', {
+        timestamp,
+        to: maskedPhone,
+        type: request.payload.type,
+        sid: message.sid,
+      });
+
+      return { success: true, provider: this.name, timestamp };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error('❌ [SMSProvider] Twilio error', { message });
+      return {
+        success: false,
+        provider: this.name,
+        timestamp,
+        error: `Twilio error: ${message}`,
+      };
+    }
   }
 }
 
-/**
- * SMS configuration (for future implementation)
- */
-export interface SMSConfig {
-  accountSid?: string;
-  authToken?: string;
-  fromNumber: string;
-  maxLength?: number;
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/**
- * SMS template structure (for future implementation)
- */
-export interface SMSTemplate {
-  message: string;
-  maxLength: number;
+function maskPhone(phone: string): string {
+  return phone.length >= 4 ? `***${phone.slice(-4)}` : '***';
 }
-
-/**
- * Future implementation notes:
- * 
- * 1. Install SMS service SDK:
- *    npm install twilio
- *    or
- *    npm install @aws-sdk/client-sns
- * 
- * 2. Add environment variables:
- *    TWILIO_ACCOUNT_SID=your-account-sid
- *    TWILIO_AUTH_TOKEN=your-auth-token
- *    TWILIO_FROM_NUMBER=+1234567890
- * 
- * 3. Create SMS templates for each notification type
- *    - Keep messages under 160 characters
- *    - Include opt-out instructions
- *    - Add unsubscribe link
- * 
- * 4. Implement send() method with:
- *    - Phone number validation (E.164 format)
- *    - Message length validation
- *    - Rate limiting (avoid spam)
- *    - Cost tracking
- *    - Delivery status tracking
- *    - Retry logic for failures
- * 
- * 5. Update isAvailable() to check configuration
- * 
- * 6. Handle opt-out requests:
- *    - Check emergency_contacts.can_receive_sms
- *    - Respect quiet hours
- *    - Log all SMS attempts
- * 
- * 7. Security considerations:
- *    - Never log full phone numbers in production
- *    - Mask phone numbers in logs
- *    - Encrypt phone numbers at rest
- *    - Comply with TCPA regulations
- */

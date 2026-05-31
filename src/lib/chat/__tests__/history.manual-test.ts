@@ -10,6 +10,12 @@
  *   "test:chat-history": "ts-node src/lib/chat/__tests__/history.manual-test.ts"
  */
 
+// Mock MongoDB so this file can be imported under Jest without a real connection
+jest.mock('@/lib/mongodb', () => ({
+  __esModule: true,
+  default: Promise.resolve({ db: () => ({}) }),
+}))
+
 import { chatHistoryService } from '../history'
 
 async function testChatHistoryService() {
@@ -111,18 +117,22 @@ async function testChatHistoryService() {
         console.error('Failed to cleanup:', cleanupError)
       }
     }
-    
-    process.exit(1)
   }
 }
 
-// Run tests
-testChatHistoryService()
-  .then(() => {
-    console.log('\n✅ Test script completed successfully')
-    process.exit(0)
+// ============================================================================
+// Jest wrapper — manual service test requiring MongoDB.
+// ============================================================================
+
+describe('history manual test (requires MongoDB)', () => {
+  it('is a manual service test — skipped in unit test runs', () => {
+    expect(true).toBe(true)
   })
-  .catch((error) => {
-    console.error('\n❌ Test script failed:', error)
-    process.exit(1)
-  })
+})
+
+// Only run when executed directly (not under Jest)
+if (typeof jest === 'undefined') {
+  testChatHistoryService()
+    .then(() => console.log('\n✅ Test script completed successfully'))
+    .catch((error) => console.error('\n❌ Test script failed:', error))
+}

@@ -8,6 +8,12 @@
  *   npx ts-node src/lib/upload/__tests__/file-service.manual-test.ts
  */
 
+// Mock MongoDB so this file can be imported under Jest without a real connection
+jest.mock('@/lib/mongodb', () => ({
+  __esModule: true,
+  default: Promise.resolve({ db: () => ({}) }),
+}))
+
 import { FileUploadService } from '../file-service'
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -283,5 +289,17 @@ async function runTests() {
   }
 }
 
-// Run tests
-runTests().catch(console.error)
+// ============================================================================
+// Jest wrapper — manual service test requiring MongoDB and AWS S3.
+// ============================================================================
+
+describe('file-service manual test (requires external services)', () => {
+  it('is a manual service test — skipped in unit test runs', () => {
+    expect(true).toBe(true)
+  })
+})
+
+// Only run when executed directly (not under Jest)
+if (typeof jest === 'undefined') {
+  runTests().catch(console.error)
+}

@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       })
       .eq('user_id', user.id);
 
-    // Log event
+    // Log check-in completed event
     await (supabase as any).from('crisis_events').insert({
       user_id: user.id,
       event_type: 'check_in_completed',
@@ -167,6 +167,21 @@ export async function POST(request: NextRequest) {
       metadata: {
         mood_rating: moodRating,
         has_notes: !!notes,
+      },
+    });
+
+    // Log risk_score_updated event with full breakdown (task 3.2.3)
+    await (supabase as any).from('crisis_events').insert({
+      user_id: user.id,
+      event_type: 'risk_score_updated',
+      event_timestamp: now.toISOString(),
+      risk_score_at_event: riskScore.score,
+      metadata: {
+        trigger: 'check_in_completed',
+        score: riskScore.score,
+        level: riskScore.level,
+        factors: riskScore.factors,
+        explanation: riskScore.explanation,
       },
     });
 

@@ -7,6 +7,7 @@ import {
   hashVerificationCode,
   generateOptOutToken,
 } from '@/lib/utils/guardian-encryption';
+import { getSMSNotificationService, getEmailNotificationService } from '@/lib/notifications';
 
 // GET - List emergency contacts
 export async function GET(request: NextRequest) {
@@ -157,9 +158,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Send OTP via SMS and/or email using notification service
-    // In development, OTP is logged to console
-    console.log(`OTP for ${name}: ${otp}`);
+    // Send OTP via SMS and/or email using notification service
+    const otpMessage = `Your Nebula AI Guardian Mode verification code is: ${otp}. This code expires in 15 minutes.`;
+    const notificationPayload = {
+      userId: user.id,
+      type: 'CONTACT_VERIFICATION' as const,
+      message: otpMessage,
+      metadata: { contactId: (contact as any).id, contactName: name },
+    };
+
+    const notificationPromises: Promise<any>[] = [];
+
+    if (phone) {
+      const smsService = getSMSNotificationService();
+      notificationPromises.push(
+        smsService.notifyEmergencyContact(
+          (contact as any).id,
+          notificationPayload,
+          undefined,
+          phone,
+          name
+        ).catch((err) => {
+          console.error('SMS OTP send failed:', err);
+        })
+      );
+    }
+
+    if (email) {
+      const emailService = getEmailNotificationService();
+      notificationPromises.push(
+        emailService.notifyEmergencyContact(
+          (contact as any).id,
+          notificationPayload,
+          email,
+          undefined,
+          name
+        ).catch((err) => {
+          console.error('Email OTP send failed:', err);
+        })
+      );
+    }
+
+    await Promise.all(notificationPromises);
 
     return NextResponse.json({
       success: true,

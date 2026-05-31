@@ -256,6 +256,87 @@ export function shouldEscalate(
 }
 
 /**
+ * Gather risk factors for a user from the database and recalculate their risk score.
+ * Updates guardian_settings.current_risk_score and logs a risk_score_updated event.
+ *
+ * Intended to be called by the escalation engine when a check-in is marked missed.
+ */
+export async function updateRiskScoreOnMissedCheckin(
+  supabase: any,
+  userId: string,
+): Promise<RiskScoreResult> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Count consecutive missed check-ins
+  const { data: recentCheckins } = await supabase
+    .from('wellness_checkins')
+    .select('mood_rating, status, created_at')
+    .eq('user_id', userId)
+    .gte('created_at', sevenDaysAgo.toISOString())
+    .order('created_at', { ascending: false });
+
+  const checkins: Array<{ mood_rating: number | null; status: string }> = recentCheckins ?? [];
+
+  // Count consecutive missed from most recent
+  let consecutiveMissed = 0;
+  for (const c of checkins) {
+    if (c.status === 'missed') {
+      consecutiveMissed++;
+    } else {
+      break;
+    }
+  }
+
+  // Positive check-ins in last 7 days
+  const positiveCheckins = checkins.filter(
+    (c) => c.status === 'completed' && c.mood_rating !== null && c.mood_rating >= 7,
+  ).length;
+
+  // Mood ratings for trend detection
+  const moodRatings = checkins
+    .filter((c) => c.mood_rating !== null)
+    .map((c) => c.mood_rating as number)
+    .reverse(); // oldest first
+
+  const decliningMoodTrend = detectDecliningMoodTrend(moodRatings);
+
+  const riskResult = calculateRiskScore({
+    consecutiveMissedCheckins: consecutiveMissed,
+    distressLanguageFrequency: 0, // Not re-analysed here; captured at check-in time
+    decliningMoodTrend,
+    explicitCrisisKeywords: 0,
+    positiveCheckins,
+  });
+
+  // Update guardian_settings
+  await supabase
+    .from('guardian_settings')
+    .update({
+      current_risk_score: riskResult.score,
+      updated_at: now.toISOString(),
+    })
+    .eq('user_id', userId);
+
+  // Log risk_score_updated event
+  await supabase.from('crisis_events').insert({
+    user_id: userId,
+    event_type: 'risk_score_updated',
+    event_timestamp: now.toISOString(),
+    risk_score_at_event: riskResult.score,
+    metadata: {
+      trigger: 'missed_checkin',
+      score: riskResult.score,
+      level: riskResult.level,
+      factors: riskResult.factors,
+      explanation: riskResult.explanation,
+    },
+  });
+
+  return riskResult;
+}
+
+/**
  * Get risk level description for UI
  */
 export function getRiskLevelDescription(level: string): string {

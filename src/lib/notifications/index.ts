@@ -95,9 +95,34 @@ export function createNotificationService(
   });
 }
 
+/**
+ * Get a NotificationService backed by SMSProvider (with ConsoleProvider fallback)
+ */
+export function getSMSNotificationService(): NotificationService {
+  return new NotificationService({
+    provider: new SMSProvider(),
+    fallbackProvider: new ConsoleProvider(),
+    retryAttempts: 3,
+    retryDelayMs: 1000,
+  });
+}
+
+/**
+ * Get a NotificationService backed by EmailProvider (with ConsoleProvider fallback)
+ */
+export function getEmailNotificationService(): NotificationService {
+  return new NotificationService({
+    provider: new EmailProvider(),
+    fallbackProvider: new ConsoleProvider(),
+    retryAttempts: 3,
+    retryDelayMs: 1000,
+  });
+}
+
 // Export all types and classes
 export * from './types';
 export { NotificationService } from './NotificationService';
 export { ConsoleProvider } from './providers/ConsoleProvider';
 export { EmailProvider } from './providers/EmailProvider';
 export { SMSProvider } from './providers/SMSProvider';
+export { PushProvider } from './providers/PushProvider';

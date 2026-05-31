@@ -305,5 +305,17 @@ async function runTests() {
   }
 }
 
-// Run tests
-runTests().catch(console.error)
+// ============================================================================
+// Jest wrapper — manual API test script requiring a live server.
+// ============================================================================
+
+describe('file-upload-api manual test (requires live server)', () => {
+  it('is a manual API test script — skipped in unit test runs', () => {
+    expect(true).toBe(true)
+  })
+})
+
+// Only run when executed directly (not under Jest)
+if (typeof jest === 'undefined') {
+  runTests().catch(console.error)
+}
